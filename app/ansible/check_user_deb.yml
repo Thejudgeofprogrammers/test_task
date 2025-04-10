@@ -1,0 +1,14 @@
+---
+- name: Check user on PostgreSQL
+  hosts: debian
+  become: yes
+  gather_facts: yes
+
+  vars_files:
+    - ./group_vars/vars.yml
+
+  tasks:
+    - name: Send to PostgreSQL SELECT 1
+      command: psql -U {{ db_user }} -h localhost -c "SELECT 1"
+      register: db_check
+      failed_when: db_check.rc != 0

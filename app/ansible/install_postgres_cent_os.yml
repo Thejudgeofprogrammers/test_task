@@ -1,0 +1,77 @@
+- name: Install PostgreSQL 14 on CentOS
+  hosts: centos
+  become: yes
+  gather_facts: yes
+
+  vars_files:
+    - ./group_vars/vars.yml
+
+  tasks:
+    - name: Install required packages
+      dnf:
+        name:
+          - wget
+          - python3-pip
+          - python3-psycopg2
+        state: present
+
+    - name: Download PostgreSQL 14 repository RPM
+      get_url:
+        url: https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+        dest: /tmp/pgdg-redhat-repo-latest.noarch.rpm
+
+    - name: Install PostgreSQL repository RPM without GPG check
+      command: rpm -Uvh /tmp/pgdg-redhat-repo-latest.noarch.rpm
+      ignore_errors: yes
+
+    - name: Disable built-in PostgreSQL module
+      shell: dnf -qy module disable postgresql
+
+    - name: Install PostgreSQL 14 server and contrib
+      dnf:
+        name:
+          - postgresql14
+          - postgresql14-server
+          - postgresql14-contrib
+        state: present
+
+    - name: Create PostgreSQL data directory (if needed)
+      file:
+        path: /var/lib/pgsql/14/data
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0700'
+
+    - name: Initialize PostgreSQL manually
+      become_user: postgres
+      shell: "/usr/pgsql-14/bin/initdb -D /var/lib/pgsql/14/data"
+      args:
+        creates: /var/lib/pgsql/14/data/PG_VERSION
+
+    - name: Start PostgreSQL manually with pg_ctl
+      become_user: postgres
+      shell: >
+        /usr/pgsql-14/bin/pg_ctl -D /var/lib/pgsql/14/data -l /var/lib/pgsql/14/logfile start
+      async: 10
+      poll: 0
+
+    - name: Wait for PostgreSQL to be up
+      wait_for:
+        host: "127.0.0.1"
+        port: 5432
+        delay: 3
+        timeout: 30
+
+    - name: Allow external connections
+      lineinfile:
+        path: /var/lib/pgsql/14/data/postgresql.conf
+        regexp: '^#listen_addresses ='
+        line: "listen_addresses = '*'"
+
+    - name: Configure pg_hba.conf for remote access
+      lineinfile:
+        path: /var/lib/pgsql/14/data/pg_hba.conf
+        line: "host    all    {{ db_user }}    {{ ip_student }}/32    md5"
+        insertafter: EOF
+      notify: restart postgresql manually
