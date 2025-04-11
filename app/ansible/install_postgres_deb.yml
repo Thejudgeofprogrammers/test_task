@@ -84,4 +84,10 @@
     - name: Start PostgreSQL 14 main cluster directly
       command: "pg_ctlcluster 14 main start"
       ignore_errors: yes
-      notify: pg_ctlcluster 14 main restart
+      notify: restart postgresql
+
+  handlers:
+    - name: restart postgresql
+      service:
+        name: postgresql
+        state: restarted

@@ -2,6 +2,7 @@ import subprocess
 import sys
 import re
 import os
+import socket
 from tools import ToolsAnsible
 
 
@@ -18,6 +19,13 @@ class Tools:
         ).communicate()
 
         return True if stdout else False
+
+
+    def resolve_to_ip(self, host: str) -> str | None:
+        try:
+            return socket.gethostbyname(host.strip())
+        except socket.gaierror:
+            return None
 
 
     def check_valid_ips(self, arr_ips: list[str]) -> bool:
@@ -79,10 +87,11 @@ if __name__ == "__main__":
     tool = Tools()
     tool_ansible = ToolsAnsible()
 
-    print('\nWrite ip or domen in format ip1,ip2 or domain1,domain2: ')
+    print('\nWrite ip or domen. Example ip1,ip2 or domain1,ip2: ')
 
     ips = list(sys.stdin.readline().strip().split(','))
-    # ips = ["192.168.100.10","192.168.100.20"]
+
+    ips = [tool.resolve_to_ip(ips[0]), tool.resolve_to_ip(ips[1])]
 
     if "debian" not in tool_ansible.get_os_realize(ips[0]):
         ips = [ips[1], ips[0]]
@@ -105,12 +114,13 @@ if __name__ == "__main__":
     
     print('\nGenerate vars.yml...')
     if min_avg[0] == ips[0]:
-        tool_ansible.generate_vars(ips[1])
+        tool_ansible.generate_vars(ips[1], ips[0])
     else:
-        tool_ansible.generate_vars(ips[0])
+        tool_ansible.generate_vars(ips[0], ips[1])
     print('Generate successful')
     
     # процесс скачивания PostgreSQL на host с min_avg
     install_postgres = tool_ansible.run_playbook_to_install_postgre(system_min_avg)
-    check_student = tool_ansible.run_playbook_to_check_student(install_postgres)
+    tool_ansible.run_playbook_to_check_student(install_postgres)
+    print("\nThe program has ended")
      

@@ -8,7 +8,12 @@
     - ./group_vars/vars.yml
 
   tasks:
-    - name: Send to PostgreSQL SELECT 1
-      command: psql -U {{ db_user }} -h localhost -c "SELECT 1"
+    - name: Run SELECT 1 on remote PostgreSQL
+      shell: |
+        PGPASSWORD={{ db_password }} psql -U {{ db_user }} -h {{ ip_host }} -c "SELECT 1"
       register: db_check
       failed_when: db_check.rc != 0
+
+    - name: Print query output
+      debug:
+        var: db_check.stdout
