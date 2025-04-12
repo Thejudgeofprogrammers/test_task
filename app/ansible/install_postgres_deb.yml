@@ -27,33 +27,27 @@
       apt:
         update_cache: yes
         cache_valid_time: 3600
+    
+    - name: Установить sudo, если отсутствует
+      apt:
+        name: sudo
+        state: present
+      become: yes
 
   tasks:
-    - name: Install PostgreSQL 14 on Debian (statistically)
+    - name: Install PostgreSQL 14 on Debian
       apt:
         name: postgresql-14=14.*
         state: present
         allow_unauthenticated: yes
 
-    - name: Install python3-pip
+    - name: Install required python packages
       apt:
-        name: python3-pip
+        name:
+          - python3-pip
+          - python3-packaging
+          - python3-psycopg2
         state: present
-
-    - name: Install python3-packaging via apt
-      apt:
-        name: python3-packaging
-        state: present
-
-    - name: Install psycopg2 (PostgreSQL Python adapter) via apt
-      apt:
-        name: python3-psycopg2
-        state: present
-
-    - name: Find out if PostgreSQL is initialized
-      stat:
-        path: /var/lib/postgresql/14/main/pg_hba.conf
-      register: postgres_data
 
     - name: Check if PostgreSQL 14 main cluster exists
       shell: "pg_lsclusters | grep -w '14\\s\\+main'"
@@ -65,29 +59,47 @@
       command: "pg_createcluster 14 main --start"
       when: cluster_check.rc != 0
 
-    - name: Allow PostgreSQL to accept external connections
+    - name: Ensure PostgreSQL listens on all addresses
       lineinfile:
         path: /etc/postgresql/14/main/postgresql.conf
-        regexp: '^#listen_addresses'
+        regexp: '^#?listen_addresses'
         line: "listen_addresses = '*'"
-      notify:
-        - restart postgresql
-    
-    - name: Allow user '{{ db_user }}' to connect only from the second server's IP
+      notify: restart postgresql
+
+    - name: Ensure PostgreSQL is using port 5432
+      lineinfile:
+        path: /etc/postgresql/14/main/postgresql.conf
+        regexp: '^#?port\s*='
+        line: "port = 5432"
+      notify: restart postgresql
+
+    - name: Allow remote connection from student
       lineinfile:
         path: /etc/postgresql/14/main/pg_hba.conf
         line: "host    all    {{ db_user }}    {{ ip_student }}/32    md5"
         insertafter: EOF
-      notify:
-        - restart postgresql
-    
-    - name: Start PostgreSQL 14 main cluster directly
-      command: "pg_ctlcluster 14 main start"
-      ignore_errors: yes
       notify: restart postgresql
+
+    - name: Ensure PostgreSQL cluster is started
+      command: pg_ctlcluster 14 main start
+      ignore_errors: true
+
+    - name: Wait for PostgreSQL to be available on port 5432
+      wait_for:
+        host: 127.0.0.1
+        port: 5432
+        timeout: 15
+        state: started
+
+    - name: Create PostgreSQL user '{{ db_user }}'
+      become: true
+      become_user: postgres
+      shell: |
+        psql -tc "SELECT 1 FROM pg_roles WHERE rolname='{{ db_user }}'" | grep -q 1 || \
+        psql -c "CREATE ROLE {{ db_user }} WITH LOGIN PASSWORD '{{ db_password }}';"
+      args:
+        executable: /bin/bash
 
   handlers:
     - name: restart postgresql
-      service:
-        name: postgresql
-        state: restarted
+      command: pg_ctlcluster 14 main restart

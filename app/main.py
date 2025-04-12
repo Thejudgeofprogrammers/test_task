@@ -38,6 +38,7 @@ class Tools:
 
 
     def gen_inventory_file(self, ips: list[str]):
+        print('\nGeneration inventory file...')
         if len(ips) != 2:
             print('You not write two ips')
             return
@@ -56,15 +57,19 @@ class Tools:
         if not os.path.isfile("inventory.ini"):
             print('Inventory file not exists')
             return
+        print('Generation Successful' + '\n')
 
 
     def get_ping_servers(self):
+        print('Servers calling...')
         ans = self.tool_ansible.ping_servers()
         pong_count = ans.count('"pong"')
         if pong_count == 2:
-            return 'Calling successful'
+            print('Calling successful')
+            return
         else:
-            return ans
+            print(ans)
+            return
 
 
     def get_avg(self, arr_ips):
@@ -88,28 +93,21 @@ if __name__ == "__main__":
     tool_ansible = ToolsAnsible()
 
     print('\nWrite ip or domen. Example ip1,ip2 or domain1,ip2: ')
-
     ips = list(sys.stdin.readline().strip().split(','))
-
     ips = [tool.resolve_to_ip(ips[0]), tool.resolve_to_ip(ips[1])]
 
     if "debian" not in tool_ansible.get_os_realize(ips[0]):
         ips = [ips[1], ips[0]]
 
-    print('\nGeneration inventory file...')
     tool.gen_inventory_file(ips)
-    print('Generation Successful' + '\n')
-
-    print('Servers calling...')
-    print(tool.get_ping_servers())
+    tool.get_ping_servers()
 
     total_avgs = tool.get_avg(ips)
     print(f"\nLast-minute load on Debian: {total_avgs[0][1]}")
     print(f"Last-minute load on CentOS: {total_avgs[1][1]}")
     
-    min_avg = min(total_avgs, key=lambda x: x[1])
-
     # Процесс получения названия системы с минимальной загруженностью
+    min_avg = min(total_avgs, key=lambda x: x[1])
     system_min_avg = tool_ansible.get_os_realize(min_avg[0])
     
     print('\nGenerate vars.yml...')
@@ -121,6 +119,5 @@ if __name__ == "__main__":
     
     # процесс скачивания PostgreSQL на host с min_avg
     install_postgres = tool_ansible.run_playbook_to_install_postgre(system_min_avg)
-    tool_ansible.run_playbook_to_check_student(install_postgres)
     print("\nThe program has ended")
      
