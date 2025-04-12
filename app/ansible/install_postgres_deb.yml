@@ -13,26 +13,28 @@
         name: gnupg
         state: present
 
+    - name: Install lsb-release (для других задач, если надо)
+      apt:
+        name: lsb-release
+        state: present
+
     - name: Add PostgreSQL APT repository key
       apt_key:
         url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
         state: present
 
-    - name: Add PostgreSQL APT repository
+    - name: Add PostgreSQL APT repository (используем bullseye!)
       apt_repository:
-        repo: "deb http://apt.postgresql.org/pub/repos/apt/ {{ ansible_facts.lsb.codename }}-pgdg main"
+        repo: "deb http://apt.postgresql.org/pub/repos/apt/ bullseye-pgdg main"
         state: present
+
+    - name: Clean apt cache
+      command: apt clean
 
     - name: Update apt cache
       apt:
         update_cache: yes
         cache_valid_time: 3600
-    
-    - name: Установить sudo, если отсутствует
-      apt:
-        name: sudo
-        state: present
-      become: yes
 
   tasks:
     - name: Install PostgreSQL 14 on Debian
@@ -93,10 +95,10 @@
 
     - name: Create PostgreSQL user '{{ db_user }}'
       become: true
-      become_user: postgres
       shell: |
-        psql -tc "SELECT 1 FROM pg_roles WHERE rolname='{{ db_user }}'" | grep -q 1 || \
-        psql -c "CREATE ROLE {{ db_user }} WITH LOGIN PASSWORD '{{ db_password }}';"
+        cd / && \
+        sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='{{ db_user }}'" | grep -q 1 || \
+        sudo -u postgres psql -c "CREATE ROLE {{ db_user }} WITH LOGIN PASSWORD '{{ db_password }}';"
       args:
         executable: /bin/bash
 

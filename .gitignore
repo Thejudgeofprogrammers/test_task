@@ -2,3 +2,6 @@ docs
 app/__pycache__
 image.png
 ssh_key.pem
+app/ansible/group_vars
+auth.pem.pub
+inventory.ini
