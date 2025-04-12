@@ -50,7 +50,7 @@ ansible_python_interpreter=/usr/bin/python3
         print(f'\nThe least loaded server is selected: {system}')
         print(f'\nStarting the PostgreSQL installation on the server: {system}...')
         
-        cmd = f"ansible-playbook -i {self.filename} -l {system} {playbook_install} -vvv"
+        cmd = f"ansible-playbook -i {self.filename} -l {system} {playbook_install} -v"
         proc = subprocess.run(cmd, shell=True, capture_output=True, text=True)
         
         print(proc.stdout)
@@ -69,32 +69,7 @@ db_password: password
 ip_student: {ip1}
 ip_host: {ip2}
 """
-        os.makedirs('./ansible/group_vars', mode=0o777, exist_ok=True)
+        os.makedirs('./app/ansible/group_vars', mode=0o777, exist_ok=True)
 
-        with open('./ansible/group_vars/vars.yml', "w") as f:
+        with open('./app/ansible/group_vars/vars.yml', "w") as f:
             f.write(content)
-            
-    def run_playbook_to_check_student(self, system):
-        if not isinstance(system, str):
-            print('PostgreSQL installation error, program exited')
-            return
-        if "debian" in system:
-            playbook_check = os.path.abspath("app/ansible/check_user_cent_os.yml")
-            system = "centos"
-        else:
-            playbook_check = os.path.abspath("app/ansible/check_user_deb.yml")
-            system = "debian"
-        
-        
-        print('\nCheck student in PostgreSQL...')
-        cmd = f"ansible-playbook -i {self.filename} -l {system} {playbook_check} -vvv"
-        proc = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-
-        print(proc.stdout)
-        
-        if proc.returncode == 0:
-            print(f"PostgreSQL has been successfully installed on the server {system}")
-            return system
-        else:
-            print(f"PostgreSQL installation error:\n{proc.stderr}")
-            return False
