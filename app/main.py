@@ -84,15 +84,20 @@ class Tools:
         parts = loadavg_str.split()
         if not parts:
             print("Не удалось получить loadavg:", loadavg_str)
-            return
-        return float(parts[0])
+            return None
+
+        try:
+            return float(parts[0])
+        except ValueError:
+            return None
 
 
-if __name__ == "__main__":
+def main():
     tool = Tools()
     tool_ansible = ToolsAnsible()
 
     print('\nWrite ip or domen. Example ip1,ip2 or domain1,ip2: ')
+    
     ips = list(sys.stdin.readline().strip().split(','))
     ips = [tool.resolve_to_ip(ips[0]), tool.resolve_to_ip(ips[1])]
 
@@ -118,6 +123,9 @@ if __name__ == "__main__":
     print('Generate successful')
     
     # процесс скачивания PostgreSQL на host с min_avg
-    install_postgres = tool_ansible.run_playbook_to_install_postgre(system_min_avg)
+    tool_ansible.run_playbook_to_install_postgre(system_min_avg)
     print("\nThe program has ended")
-     
+
+
+if __name__ == "__main__":
+    main()

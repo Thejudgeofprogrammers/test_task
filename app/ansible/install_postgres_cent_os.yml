@@ -4,38 +4,54 @@
   become: yes
   gather_facts: yes
 
+  vars:
+    ansible_python_interpreter: /usr/bin/python3.11
+
   vars_files:
     - ./group_vars/vars.yml
 
   pre_tasks:
-    - name: Install required packages
-      yum:
-        name:
-          - yum-utils
-          - sudo
-        state: present
+    - name: Delete duplicate repositories
+      shell: |
+        rm -f /etc/yum.repos.d/pgdg-14.repo
+        rm -f /etc/yum.repos.d/pgdg-common.repo
+      ignore_errors: yes
 
-    - name: Add PostgreSQL 14 repository
-      yum_repository:
-        name: pgdg14
-        description: "PostgreSQL 14 YUM repository"
-        baseurl: https://download.postgresql.org/pub/repos/yum/14/redhat/rhel-$releasever-$basearch
-        enabled: yes
-        gpgcheck: yes
-        gpgkey: https://download.postgresql.org/pub/repos/yum/RPM-GPG-KEY-PGDG
+    - name: Install packages without checking GPG through shell
+      shell: |
+        dnf --nogpgcheck install -y yum-utils sudo
+      become: yes
 
-    - name: Disable built-in PostgreSQL module
-      command: dnf -qy module disable postgresql
+    - name: Remove existing PostgreSQL 14 repo file (if exists)
+      file:
+        path: /etc/yum.repos.d/pgdg-14.repo
+        state: absent
+        
+    - name: Install PostgreSQL 14 repo via shell
+      ansible.builtin.shell: >
+        dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-42.0-38PGDG.noarch.rpm
+
+    - name: Install packages without GPG check
+      become: yes
+      shell: |
+        dnf config-manager --setopt=pgdg14.gpgcheck=0 --save
+
+    - name: Clean DNF cache again after repo changes
+      shell: dnf clean all && dnf makecache
+
+    - name: Install PostgreSQL 14 server and client
+      ansible.builtin.shell: |
+        dnf install -y postgresql14 postgresql14-server postgresql14-contrib python3-psycopg2
 
   tasks:
-    - name: Install PostgreSQL 14 server and client
-      yum:
-        name:
-          - postgresql14
-          - postgresql14-server
-          - postgresql14-contrib
-          - python3-psycopg2
-        state: present
+
+    - name: Check the PostgreSQL installation
+      command: psql --version
+      register: psql_version
+
+    - name: Debug version
+      debug:
+        var: psql_version.stdout
 
     - name: Initialize PostgreSQL 14 database
       command: /usr/pgsql-14/bin/postgresql-14-setup initdb
@@ -76,10 +92,10 @@
         state: started
 
     - name: Create PostgreSQL user '{{ db_user }}'
-      become_user: postgres
+      become: true
       shell: |
-        psql -h 127.0.0.1 -p 5432 -U postgres -tc "SELECT 1 FROM pg_roles WHERE rolname='{{ db_user }}'" | grep -q 1 || \
-        psql -h 127.0.0.1 -p 5432 -U postgres -c "CREATE ROLE {{ db_user }} WITH LOGIN PASSWORD '{{ db_password }}';"
+        sudo -u postgres psql -t -c "SELECT 1 FROM pg_roles WHERE rolname='{{ db_user }}'" -d postgres | grep -q 1 || \
+        sudo -u postgres psql -t -c "CREATE ROLE {{ db_user }} WITH LOGIN PASSWORD '{{ db_password }}';" -d postgres
       args:
         executable: /bin/bash
 
